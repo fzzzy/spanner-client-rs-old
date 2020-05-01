@@ -1,3 +1,4 @@
+use std::sync::Arc;
 
 pub struct Db {
     address: String
@@ -83,7 +84,7 @@ impl DbError {
 
 impl From<grpcio::Error> for DbError {
     fn from(inner: grpcio::Error) -> Self {
-        DbError::new("grpcio error {:?}", inner);
+        DbError::new(format!("grpcio error {:?}", inner))
     }
 }
 
@@ -98,7 +99,7 @@ pub struct SpannerConnectionManager {
     //env: Arc<Environment>,
 }
 
-const SPANNER_ADDRESS: String = "asdf".to_string();
+const SPANNER_ADDRESS: &str = "asdf";
 
 impl ManageConnection for SpannerConnectionManager {
     type Connection = SpannerSession;
@@ -108,8 +109,9 @@ impl ManageConnection for SpannerConnectionManager {
         // Requires GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
         let creds = ChannelCredentials::google_default_credentials()?;
 
+        let arc = Arc::new(Environment::new(32));
         // Create a Spanner client.
-        let chan = ChannelBuilder::new(self.env.clone())
+        let chan = ChannelBuilder::new(arc)
             .max_send_message_len(100 << 20)
             .max_receive_message_len(100 << 20)
             .secure_connect(SPANNER_ADDRESS, creds);
@@ -327,7 +329,7 @@ impl StreamedResultSetAsync {
 
         self.stream = Some(stream.into_future());
         let mut partial_rs = if let Some(result) = result {
-            result
+            result?
         } else {
             // Stream finished
             return Ok(false);
@@ -413,15 +415,15 @@ fn merge_by_type(lhs: Value, rhs: &Value, field_type: &Type) -> Result<Value, Db
 }
 
 fn unsupported_merge(field_type: &Type) -> Result<Value, DbError> {
-    Err(DbError::new(&format!(
+    Err(DbError::new(format!(
         "merge not supported, type: {:?}",
         field_type
-    )))
+    ).to_string()))
 }
 
 fn merge_string(mut lhs: Value, rhs: &Value) -> Result<Value, DbError> {
     if !lhs.has_string_value() || !rhs.has_string_value() {
-        Err(DbError::new("merge_string has no string value"))?
+        Err(DbError::new("merge_string has no string value".to_string()))?
     }
     let mut merged = lhs.take_string_value();
     merged.push_str(rhs.get_string_value());
