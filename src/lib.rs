@@ -1,4 +1,36 @@
+
+mod errors;
+
+use std::collections::{HashMap, VecDeque};
+use std::mem;
 use std::sync::Arc;
+
+
+use r2d2::{PooledConnection, ManageConnection};
+
+
+
+
+use futures::compat::{Compat01As03, Future01CompatExt, Stream01CompatExt};
+use futures::stream::{StreamExt, StreamFuture};
+
+use googleapis_raw::spanner::v1::{
+    result_set::{PartialResultSet, ResultSetMetadata, ResultSetStats},
+    spanner::{CreateSessionRequest, ExecuteSqlRequest, GetSessionRequest, Session},
+    spanner_grpc::SpannerClient,
+    type_pb::{StructType_Field, Type, TypeCode},
+};
+
+use protobuf::{
+    well_known_types::{ListValue, NullValue, Struct, Value},
+    RepeatedField,
+};
+
+use grpcio::{
+    CallOption, ChannelBuilder, ChannelCredentials, ClientSStreamReceiver, Environment, MetadataBuilder,
+};
+
+use crate::errors::DbError;
 
 pub struct Db {
     address: String
@@ -32,61 +64,10 @@ fn it_works() {
 
 
 
-use r2d2::{PooledConnection, ManageConnection};
-
-
-
-use std::{
-    collections::{HashMap, VecDeque},
-    mem,
-    result::Result as StdResult,
-};
-
-use futures::compat::{Compat01As03, Future01CompatExt, Stream01CompatExt};
-use futures::stream::{StreamExt, StreamFuture};
-use googleapis_raw::spanner::v1::{
-    result_set::{PartialResultSet, ResultSetMetadata, ResultSetStats},
-    spanner::ExecuteSqlRequest,
-    type_pb::{StructType_Field, Type, TypeCode},
-};
-
-use grpcio::ClientSStreamReceiver;
-use protobuf::{
-    well_known_types::{ListValue, NullValue, Struct, Value},
-    RepeatedField,
-};
-
-use googleapis_raw::spanner::v1::{
-    spanner::{CreateSessionRequest, GetSessionRequest, Session},
-    spanner_grpc::SpannerClient,
-};
-use grpcio::{
-    CallOption, ChannelBuilder, ChannelCredentials, EnvBuilder, Environment, MetadataBuilder,
-};
 
 
 
 
-
-
-#[derive(Debug)]
-pub struct DbError {
-    message: String,
-}
-
-impl DbError {
-    fn new(message: String) -> Self {
-        DbError {
-            message
-        }
-    }
-}
-
-impl From<grpcio::Error> for DbError {
-    fn from(inner: grpcio::Error) -> Self {
-        DbError::new(format!("grpcio error {:?}", inner))
-    }
-}
 
 pub struct SpannerSession {
     pub client: SpannerClient,
