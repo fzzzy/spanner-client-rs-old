@@ -5,32 +5,16 @@ mod db;
 mod errors;
 mod metadata;
 
-use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
-use std::mem;
-use std::{convert::TryInto, sync::Arc};
+use connection::SpannerConnection;
+use db::Db;
+use errors::DbError;
 
-use futures::compat::{Compat01As03, Stream01CompatExt};
-use futures::stream::{StreamExt, StreamFuture};
+pub fn connect(host: String, dbname: String) -> Result<SpannerConnection, DbError> {
+    let db = Db::new(host);
+    db.connect(dbname)
+}
 
-use googleapis_raw::spanner::v1::{
-    result_set::{PartialResultSet, ResultSetMetadata, ResultSetStats},
-    spanner::{BeginTransactionRequest, CommitRequest, CreateSessionRequest, ExecuteSqlRequest, GetSessionRequest, RollbackRequest, Session},
-    spanner_grpc::SpannerClient,
-    transaction::{
-        TransactionOptions, TransactionOptions_ReadOnly, TransactionOptions_ReadWrite, TransactionSelector,
-    },
-    type_pb::{StructType_Field, Type, TypeCode},
-};
-
-use protobuf::{
-    well_known_types::{ListValue, NullValue, Struct, Value},
-    RepeatedField,
-};
-
-use grpcio::{
-    CallOption, ChannelBuilder, ChannelCredentials, ClientSStreamReceiver, Environment, MetadataBuilder,
-};
-
-
-
+#[test]
+fn test_connect() {
+    connect("asdf".to_string(), "asdf".to_string()).unwrap();
+}

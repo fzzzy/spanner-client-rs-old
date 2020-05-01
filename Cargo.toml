@@ -1,5 +1,5 @@
 [package]
-name = "spanner-client-rs"
+name = "spanner_client_rs"
 version = "0.1.0"
 authors = ["Donovan Preston <donovanpreston@gmail.com>"]
 edition = "2018"
@@ -11,3 +11,6 @@ futures = { version = "0.3", features = ["compat"] }
 googleapis-raw = { version = "0", path = "vendor/googleapis-raw" }
 protobuf = "2.12.0"
 grpcio = "0.5"
+
+[[bin]]
+name = "test"

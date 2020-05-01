@@ -1,30 +1,14 @@
 
-
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
-use std::mem;
-use std::{convert::TryInto, sync::Arc};
-
-use futures::compat::{Compat01As03, Stream01CompatExt};
-use futures::stream::{StreamExt, StreamFuture};
+use std::sync::Arc;
 
 use googleapis_raw::spanner::v1::{
-    result_set::{PartialResultSet, ResultSetMetadata, ResultSetStats},
-    spanner::{BeginTransactionRequest, CommitRequest, CreateSessionRequest, ExecuteSqlRequest, GetSessionRequest, RollbackRequest, Session},
+    spanner::{CreateSessionRequest, Session},
     spanner_grpc::SpannerClient,
-    transaction::{
-        TransactionOptions, TransactionOptions_ReadOnly, TransactionOptions_ReadWrite, TransactionSelector,
-    },
-    type_pb::{StructType_Field, Type, TypeCode},
-};
-
-use protobuf::{
-    well_known_types::{ListValue, NullValue, Struct, Value},
-    RepeatedField,
 };
 
 use grpcio::{
-    CallOption, ChannelBuilder, ChannelCredentials, ClientSStreamReceiver, Environment, MetadataBuilder,
+    CallOption, ChannelBuilder, ChannelCredentials, Environment, MetadataBuilder,
 };
 
 use crate::connection::SpannerConnection;
@@ -34,21 +18,21 @@ use crate::metadata::SpannerMetadata;
 const SPANNER_ADDRESS: &str = "asdf";
 
 pub struct Db {
-    name: String
+    host: String
 }
 
 impl Db {
-    fn create_session(&self, client: &SpannerClient) -> Result<Session, grpcio::Error> {
+    fn create_session(&self, client: &SpannerClient, dbname: String) -> Result<Session, grpcio::Error> {
         let mut req = CreateSessionRequest::new();
-        req.database = self.name.to_owned();
+        req.database = dbname.to_owned();
         let mut meta = MetadataBuilder::new();
-        meta.add_str("google-cloud-resource-prefix", &self.name)?;
+        meta.add_str("google-cloud-resource-prefix", &dbname)?;
         meta.add_str("x-goog-api-client", "gcp-grpc-rs")?;
         let opt = CallOption::default().headers(meta.build());
         client.create_session_opt(&req, opt)
     }
     
-    fn connect(&self, address: String) -> Result<SpannerConnection, DbError> {
+    pub fn connect(&self, dbname: String) -> Result<SpannerConnection, DbError> {
         let creds = ChannelCredentials::google_default_credentials()?;
     
         let arc = Arc::new(Environment::new(32));
@@ -60,22 +44,22 @@ impl Db {
         let client = SpannerClient::new(chan);
     
         // Connect to the instance and create a Spanner session.
-        let session = self.create_session(&client)?;
+        let session = self.create_session(&client, dbname)?;
     
         Ok(SpannerConnection {
             client,
             session,
-            metadata: SpannerMetadata {
+            metadata: RefCell::new(SpannerMetadata {
                 in_write_transaction: false,
                 transaction: None,
                 execute_sql_count: 0,
-            }
+            })
         })
     }
     
-    fn new(name: String) -> Self {
+    pub fn new(host: String) -> Self {
         Db {
-            name
+            host
         }
     }
 }
