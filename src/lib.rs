@@ -5,13 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use std::mem;
 use std::sync::Arc;
 
-
-use r2d2::{PooledConnection, ManageConnection};
-
-
-
-
-use futures::compat::{Compat01As03, Future01CompatExt, Stream01CompatExt};
+use futures::compat::{Compat01As03, Stream01CompatExt};
 use futures::stream::{StreamExt, StreamFuture};
 
 use googleapis_raw::spanner::v1::{
@@ -32,64 +26,26 @@ use grpcio::{
 
 use crate::errors::DbError;
 
+const SPANNER_ADDRESS: &str = "asdf";
+
 pub struct Db {
-    address: String
+    name: String
 }
 
 impl Db {
-    fn new(address: String) -> Self {
-        Db {
-            address
-        }
+    fn create_session(&self, client: &SpannerClient) -> Result<Session, grpcio::Error> {
+        let mut req = CreateSessionRequest::new();
+        req.database = self.name.to_owned();
+        let mut meta = MetadataBuilder::new();
+        meta.add_str("google-cloud-resource-prefix", &self.name)?;
+        meta.add_str("x-goog-api-client", "gcp-grpc-rs")?;
+        let opt = CallOption::default().headers(meta.build());
+        client.create_session_opt(&req, opt)
     }
-}
-
-fn connect(address: String) -> Db {
-    Db::new(address)
-}
-
-#[test]
-fn it_works() {
-    let db = connect("asdf".to_string());
-    assert_eq!(db.address, "asdf".to_string());
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-pub struct SpannerSession {
-    pub client: SpannerClient,
-    pub session: Session,
-}
-
-pub struct SpannerConnectionManager {
-    database_name: String,
-    // The gRPC environment
-    //env: Arc<Environment>,
-}
-
-const SPANNER_ADDRESS: &str = "asdf";
-
-impl ManageConnection for SpannerConnectionManager {
-    type Connection = SpannerSession;
-    type Error = grpcio::Error;
-
-    fn connect(&self) -> Result<Self::Connection, Self::Error> {
-        // Requires GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+    
+    fn connect(&self, address: String) -> Result<SpannerSession, DbError> {
         let creds = ChannelCredentials::google_default_credentials()?;
-
+    
         let arc = Arc::new(Environment::new(32));
         // Create a Spanner client.
         let chan = ChannelBuilder::new(arc)
@@ -97,48 +53,30 @@ impl ManageConnection for SpannerConnectionManager {
             .max_receive_message_len(100 << 20)
             .secure_connect(SPANNER_ADDRESS, creds);
         let client = SpannerClient::new(chan);
-
+    
         // Connect to the instance and create a Spanner session.
-        let session = create_session(&client, &self.database_name)?;
-
+        let session = self.create_session(&client)?;
+    
         Ok(SpannerSession {
             client,
             session,
         })
     }
-
-    fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        let mut req = GetSessionRequest::new();
-        req.set_name(conn.session.get_name().to_owned());
-        if let Err(e) = conn.client.get_session(&req) {
-            match e {
-                grpcio::Error::RpcFailure(ref status)
-                    if status.status == grpcio::RpcStatusCode::NOT_FOUND =>
-                {
-                    conn.session = create_session(&conn.client, &self.database_name)?;
-                }
-                _ => return Err(e),
-            }
+    
+    fn new(name: String) -> Self {
+        Db {
+            name
         }
-        Ok(())
-    }
-
-    fn has_broken(&self, _conn: &mut Self::Connection) -> bool {
-        false
     }
 }
 
-fn create_session(client: &SpannerClient, database_name: &str) -> Result<Session, grpcio::Error> {
-    let mut req = CreateSessionRequest::new();
-    req.database = database_name.to_owned();
-    let mut meta = MetadataBuilder::new();
-    meta.add_str("google-cloud-resource-prefix", database_name)?;
-    meta.add_str("x-goog-api-client", "gcp-grpc-rs")?;
-    let opt = CallOption::default().headers(meta.build());
-    client.create_session_opt(&req, opt)
+
+pub struct SpannerSession {
+    pub client: SpannerClient,
+    pub session: Session,
 }
 
-pub type Conn = PooledConnection<SpannerConnectionManager>;
+pub type Conn = SpannerSession;
 
 pub fn as_value(string_value: String) -> Value {
     let mut value = Value::new();
@@ -224,15 +162,15 @@ impl ExecuteSqlRequestBuilder {
         Ok(StreamedResultSetAsync::new(stream))
     }
 
-    /// Execute a DML statement, returning the exact count of modified rows
-    pub async fn execute_dml_async(self, conn: &Conn) -> Result<i64, DbError> {
-        let rs = conn
-            .client
-            .execute_sql_async(&self.prepare_request(conn))?
-            .compat()
-            .await?;
-        Ok(rs.get_stats().get_row_count_exact())
-    }
+    // Execute a DML statement, returning the exact count of modified rows
+    // pub async fn execute_dml_async(self, conn: &Conn) -> Result<i64, DbError> {
+    //     let rs = conn
+    //         .client
+    //         .execute_sql_async(&self.prepare_request(conn))?
+    //         .compat()
+    //         .await?;
+    //     Ok(rs.get_stats().get_row_count_exact())
+    // }
 }
 
 pub struct StreamedResultSetAsync {
