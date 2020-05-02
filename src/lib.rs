@@ -9,8 +9,8 @@ use connection::SpannerConnection;
 use db::Db;
 use errors::DbError;
 
-pub fn connect(host: String, dbname: String) -> Result<SpannerConnection, DbError> {
-    let db = Db::new(host);
+pub fn connect(address: String, dbname: String) -> Result<SpannerConnection, DbError> {
+    let db = Db::new(address);
     db.connect(dbname)
 }
 

@@ -15,10 +15,8 @@ use crate::connection::SpannerConnection;
 use crate::errors::DbError;
 use crate::metadata::SpannerMetadata;
 
-const SPANNER_ADDRESS: &str = "asdf";
-
 pub struct Db {
-    host: String
+    address: String
 }
 
 impl Db {
@@ -40,7 +38,7 @@ impl Db {
         let chan = ChannelBuilder::new(arc)
             .max_send_message_len(100 << 20)
             .max_receive_message_len(100 << 20)
-            .secure_connect(SPANNER_ADDRESS, creds);
+            .secure_connect(&self.address, creds);
         let client = SpannerClient::new(chan);
     
         // Connect to the instance and create a Spanner session.
@@ -57,9 +55,9 @@ impl Db {
         })
     }
     
-    pub fn new(host: String) -> Self {
+    pub fn new(address: String) -> Self {
         Db {
-            host
+            address
         }
     }
 }
